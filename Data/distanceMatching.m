@@ -8,7 +8,7 @@ clc
 
 %%
 % load position data
-    fileCode='2-5-2016_19-14-02';
+    fileCode='2-8-2016_22-55-44';
     positionFilename=strcat('\',fileCode,'.txt');
     fileID = fopen(positionFilename); 
     info=textscan(fileID,'%s %s %f %f','Delimiter',',');
@@ -26,27 +26,30 @@ clc
     for i=1:maxTime   
         for j=1:numberOfSkeleton
             index=find(kinectTime==i & peopleID==j);
-             distanceTmp(j,i)=pdist([450,0;mean(xCoordinate(index)),mean(yCoordinate(index))],'euclidean');
-             clear index;
+            if (index~=0)
+             distanceTmp(j,i)=pdist([450,0;(xCoordinate(index(length(index)))),(yCoordinate(index(length(index))))],'euclidean');
+            else
+                distanceTmp(j,i)=0;
+            end
+         clear index;
         end
     end
     
     for i=1:numberOfSkeleton
-        tmp1=[distanceTmp(i,2:size(distanceTmp,2)),0];
-        tmp2=tmp1-distanceTmp(i,:);
-        tmp2(size(distanceTmp,2))=0;
-        relativeDistance(i,:)=smooth(gradient(distanceTmp(i,:))',5);
+%         tmp1=[distanceTmp(i,2:size(distanceTmp,2)),0];
+%         tmp2=tmp1-distanceTmp(i,:);
+%         tmp2(size(distanceTmp,2))=0;
+        relativeDistance(i,:)=smooth(gradient(distanceTmp(i,:))'./100,5);
         
-        index=find(relativeDistance(i,:)>=50);
-        relativeDistance(i,index)=0;
-        clear index;        
-        index=find(relativeDistance(i,:)<=-50);
-        relativeDistance(i,index)=-0;
+        index=find(relativeDistance(i,:)>=5);
+        relativeDistance(i,index)=5;
+        clear index;      
+        
+        index=find(relativeDistance(i,:)<=-5);
+        relativeDistance(i,index)=-5;
         clear index;
-        
     end
-
-    relativeDistance=relativeDistance./10;
+    relativeDistance=relativeDistance.*(-1);
     
 % load RFID data
     positionFilename=strcat('\RFID_',fileCode,'.txt');
@@ -54,9 +57,10 @@ clc
     info=textscan(fileID,'%s %f %f %f %s','Delimiter',',');
     fclose(fileID);
     
-    estiamtedDFS=smooth(info{2},10);
-    apiDFS=smooth(info{3},10);
-    speed=smooth(info{4}.*10,5);
+    tagID=info{1};
+    estiamtedDFS=smooth(info{2},5);
+    apiDFS=smooth(info{3},5);
+    speed=smooth(info{4},5);
     [rfidStartTime,rfidTime]=time2MS(info{5});
     
     % sync time
@@ -92,7 +96,7 @@ clc
     duration=min(length(rfidReletiveDistance),size(relativeDistance,2));
     
     figure
-    plot(rfidReletiveDistance(1:duration)); hold on;
+    plot(rfidReletiveDistance(1:duration),'rx-'); hold on;
     for i=1:size(relativeDistance,1)
         plot(relativeDistance(i,1:duration)); hold on;
     end
