@@ -2,3 +2,5 @@ C:\Users\Xinyu Li\OneDrive\Source Control\GitHub\RFID-People-Tracking\Data Colle
 C:\Users\Xinyu Li\OneDrive\Source Control\GitHub\RFID-People-Tracking\Data Collection\RFID Beta 5\obj\Debug\People Tracking.csproj.ResolveComReference.cache
 C:\Users\Xinyu Li\OneDrive\Source Control\GitHub\RFID-People-Tracking\Data Collection\RFID Beta 5\obj\Debug\RFID Beta 5.exe
 C:\Users\Xinyu Li\OneDrive\Source Control\GitHub\RFID-People-Tracking\Data Collection\RFID Beta 5\obj\Debug\RFID Beta 5.pdb
+C:\Users\Dongyang\Source\Repos\RFID-People-Tracking\Data Collection\RFID Beta 5\bin\Debug\RFID Beta 5.exe.config
+C:\Users\Dongyang\Source\Repos\RFID-People-Tracking\Data Collection\RFID Beta 5\obj\Debug\People Tracking.csproj.ResolveComReference.cache

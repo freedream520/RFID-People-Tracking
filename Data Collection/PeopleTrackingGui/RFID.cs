@@ -7,11 +7,18 @@ using Impinj.OctaneSdk;
 using System.Windows;
 using System.Reflection;
 using System.Collections.Generic;
+using NodaTime;
+using PeopleTrackingGui;
 
 namespace RFID_Beta_5
 {
     class RFID
     {
+        public static bool IsRFIDOpen = false;
+
+        public readonly static long TIME_DIFFERENCE = 4 * 3600 * 1000 + 18 * 60 * 1000 + 16 * 1000;
+
+
 
         // Create an instance of the ImpinjReader class.
         static ImpinjReader reader = new ImpinjReader();
@@ -63,6 +70,34 @@ namespace RFID_Beta_5
 
 
         static int Row_count = 1;
+
+        public static string StartTime;
+        public static string fileName;
+
+        public static Dictionary<string, RfidVelocity> RfidVelocityList;
+
+        public static Dictionary<string, DateTime> tagLastTime;
+
+        public static int frameCounter = 0;
+
+        public static int totalCounter = 0;
+
+        public static DateTime lastTagTime;
+
+        public RFID()
+        {
+            string dir = @"" + PeopleTrackingGui.Properties.Resources.DirectoryRFID;
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            StartTime = DateTime.Now.ToString("M-d-yyyy_HH-mm-ss");
+            fileName = @dir + "RFID_" + StartTime + ".txt";
+
+            RfidVelocityList = new Dictionary<string, RfidVelocity>();
+            tagLastTime = new Dictionary<string, DateTime>();
+        }
+
         public void run()
         {
             try
@@ -83,9 +118,9 @@ namespace RFID_Beta_5
                 settings.Session = 2;
                 settings.TagPopulationEstimate = 20;
                 settings.Antennas.DisableAll();
-                settings.Antennas.GetAntenna(1).IsEnabled = true;
-                settings.Antennas.GetAntenna(2).IsEnabled = false;
-                settings.Antennas.GetAntenna(3).IsEnabled = true;
+                settings.Antennas.GetAntenna(1).IsEnabled = false;
+                settings.Antennas.GetAntenna(2).IsEnabled = true;
+                settings.Antennas.GetAntenna(3).IsEnabled = false;
                 settings.Antennas.GetAntenna(4).IsEnabled = false;
 
                 settings.Antennas.GetAntenna(1).MaxTxPower = true;
@@ -110,7 +145,7 @@ namespace RFID_Beta_5
                 Console.WriteLine("Press enter to exit.");
                 Console.ReadLine();
 
-                reader.Stop();
+                //reader.Stop();
 
             }
             catch (OctaneSdkException e)
@@ -133,7 +168,7 @@ namespace RFID_Beta_5
             else Ant_1 = Ant_1 / Ant_count_1;
 
             if (Ant_count_2 == 0) Ant_2 = 0;
-            else  Ant_2 = Ant_2 / Ant_count_2;
+            else Ant_2 = Ant_2 / Ant_count_2;
 
             if (Ant_count_3 == 0) Ant_3 = 0;
             else Ant_3 = Ant_3 / Ant_count_3;
@@ -141,10 +176,10 @@ namespace RFID_Beta_5
             if (Ant_count_4 == 0) Ant_4 = 0;
             else Ant_4 = Ant_4 / Ant_count_4;
 
-            API_DFS_1 = API_DFS_1 / (Ant_count_1+1);
-            API_DFS_2 = API_DFS_2 / (Ant_count_2+1);
-            API_DFS_3 = API_DFS_3 / (Ant_count_3+1);
-            API_DFS_4 = API_DFS_4 / (Ant_count_4+1);
+            API_DFS_1 = API_DFS_1 / (Ant_count_1 + 1);
+            API_DFS_2 = API_DFS_2 / (Ant_count_2 + 1);
+            API_DFS_3 = API_DFS_3 / (Ant_count_3 + 1);
+            API_DFS_4 = API_DFS_4 / (Ant_count_4 + 1);
 
 
             Console.WriteLine(Row_count);
@@ -152,7 +187,7 @@ namespace RFID_Beta_5
             Ant_count_1 = 0; Ant_count_2 = 0; Ant_count_3 = 0; Ant_count_4 = 0;
             API_DFS_1 = 0; API_DFS_2 = 0; API_DFS_3 = 0; API_DFS_4 = 0;
 
-            if (Row_count >10000)
+            if (Row_count > 10000)
             {
                 reader.Stop();
                 reader.Disconnect();
@@ -177,9 +212,9 @@ namespace RFID_Beta_5
                     START_TIME_FLAG = true;
                 }
                 //tag.Epc.ToString() == "3008 33B2 DDD9 0140 0000 0000"   
-                if (tag.Epc.ToString() == "0000 0000 0000 0000 0000 0300")
+                if (tag.Epc.ToString() == "0908 2014 9630 0000 0000 6668" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6667")
                 {
-                    if (tag.AntennaPortNumber==1)
+                    if (tag.AntennaPortNumber == 1)
                     {
                         if (Row_count == 1)
                         {
@@ -207,7 +242,7 @@ namespace RFID_Beta_5
                             timeWriteFile = Convert.ToDouble(tag.LastSeenTime.ToString());
                             if (Math.Abs(Ant_1 - 0) < 5 && Math.Abs(Ant_1 - Ant_1_previous) <= 5)
                             {
-                                Write_file(1, Ant_1, timeWriteFile);
+                                //Write_file(1, Ant_1, timeWriteFile);
                                 Ant_1_previous = Ant_1;
                                 Row_count++;
                             }
@@ -216,7 +251,7 @@ namespace RFID_Beta_5
                             }
                         }
                         else {
-                            Console.WriteLine("Hopping here");
+                            //Console.WriteLine("Hopping here");
                             tmp_phase = 0;
                             phaseAngle_1_Past = tag.PhaseAngleInRadians;
                             timestamp_1_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
@@ -238,31 +273,45 @@ namespace RFID_Beta_5
                             Row_count++;
 
                         }
-                        else if (tag.ChannelInMhz == channel_2_Past){
-                            
-                            delta_Pahse_Angle_2_tmp =(tag.PhaseAngleInRadians-phaseAngle_2_Past) ;
+                        else if (tag.ChannelInMhz == channel_2_Past)
+                        {
+
+                            delta_Pahse_Angle_2_tmp = (tag.PhaseAngleInRadians - phaseAngle_2_Past);
                             delta_Timestamp_2_tmp = (Convert.ToDouble(tag.LastSeenTime.ToString()) - timestamp_2_Past) / 1000000;
                             tmp_phase = phaseAngle_2_Past;
-                            phaseAngle_2_Past = tag.PhaseAngleInRadians ;
+                            phaseAngle_2_Past = tag.PhaseAngleInRadians;
                             timestamp_2_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
                             Ant_2 = (1 / (4 * Math.PI)) * (delta_Pahse_Angle_2_tmp / delta_Timestamp_2_tmp);
                             API_DFS_2 = tag.RfDopplerFrequency;
                             Ant_count_2++;
                             timeWriteFile = Convert.ToDouble(tag.LastSeenTime.ToString());
-                            if (Math.Abs(Ant_2 - 0) < 5 && Math.Abs(Ant_2 - Ant_2_previous)<=5)
+                            if (Math.Abs(Ant_2 - 0) < 5 && Math.Abs(Ant_2 - Ant_2_previous) <= 5)
                             {
-                                Write_file(2, Ant_2, timeWriteFile);
+                                RFID_Beta_5.Velocity v = RFID_Beta_5.Velocity.getVelocity();
+                                double velocity = v.v_calculator(tag.ChannelInMhz, Ant_2);
+                                Write_file(tag.Epc.ToString(), Ant_2, API_DFS_2, velocity, Convert.ToDouble(tag.LastSeenTime.ToString()));
+                                //RfidVelocityList.Add(tag.Epc.ToString(),)
+
+                                frameCounter++;
+
+                                totalCounter++;
+
+
+                                RecordTagVelocity(tag.Epc.ToString(), velocity, Convert.ToDouble(tag.LastSeenTime.ToString()));
+
+                                //_formatEpc(tag.LastSeenTime.ToString());
+
                                 Ant_2_previous = Ant_2;
                                 Row_count++;
                             }
                             else {
                                 //reject
-                            }                         
+                            }
                         }
-                        else{
-                            Console.WriteLine("Hopping here");
+                        else {
+                            //Console.WriteLine("Hopping here");
                             tmp_phase = 0;
-                            phaseAngle_2_Past = tag.PhaseAngleInRadians ;
+                            phaseAngle_2_Past = tag.PhaseAngleInRadians;
                             timestamp_2_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
                             channel_2_Past = tag.ChannelInMhz;
 
@@ -296,7 +345,7 @@ namespace RFID_Beta_5
                             timeWriteFile = Convert.ToDouble(tag.LastSeenTime.ToString());
                             if (Math.Abs(Ant_3 - 0) < 5 && Math.Abs(Ant_3 - Ant_3_previous) <= 5)
                             {
-                                Write_file(3, Ant_3, timeWriteFile);
+                                //Write_file(3, Ant_3, timeWriteFile);
                                 Ant_3_previous = Ant_3;
                                 Row_count++;
                             }
@@ -305,7 +354,7 @@ namespace RFID_Beta_5
                             }
                         }
                         else {
-                            Console.WriteLine("Hopping here");
+                            //Console.WriteLine("Hopping here");
                             tmp_phase = 0;
                             phaseAngle_2_Past = tag.PhaseAngleInRadians;
                             timestamp_2_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
@@ -323,12 +372,13 @@ namespace RFID_Beta_5
                             channel_4_Past = tag.ChannelInMhz;
                         }
                         else {
-                            if (Math.Abs(tag.ChannelInMhz - channel_4_Past) == 0) {
+                            if (Math.Abs(tag.ChannelInMhz - channel_4_Past) == 0)
+                            {
                                 double delta_Pahse_Angle = (tag.PhaseAngleInRadians - phaseAngle_4_Past);
                                 double delta_Timestamp = (Convert.ToDouble(tag.LastSeenTime.ToString()) - timestamp_4_Past) / 1000000;
                                 phaseAngle_4_Past = tag.PhaseAngleInRadians;
                                 timestamp_4_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
-                                
+
                                 Ant_4 = Ant_4 + (1 / (4 * 3.1416)) * (delta_Pahse_Angle / delta_Timestamp);
                                 API_DFS_4 += tag.RfDopplerFrequency;
                                 Ant_count_4++;
@@ -337,25 +387,79 @@ namespace RFID_Beta_5
                         }
                     }
                 }
-                    
+
             }
         }
 
-        // Write into a txt file
-        public static void Write_file(int portNumber, double DFS, double time)
+        private void RecordTagVelocity(string tagId, double velocity, double time)
         {
-            FileStream file = new FileStream("Doppler.txt", FileMode.Append);
+            var timeReal = GetMbtaDateTime(time);
+            if (RfidVelocityList.ContainsKey(tagId) && tagLastTime.ContainsKey(tagId))
+            {
+
+                var lastTime = tagLastTime[tagId];
+
+                double distance = Convert.ToDouble((timeReal - lastTime).Milliseconds) * velocity / 10;
+
+                if (distance >= 4 || distance <= -4) {
+                    distance = 0;
+                }
+
+                RfidVelocityList[tagId].velocity.Add(timeReal, distance);
+
+
+                tagLastTime[tagId] = timeReal;
+
+
+            }
+            else {
+                var rfidVel = new RfidVelocity();
+                rfidVel.velocity.Add(timeReal, 0);
+                RfidVelocityList.Add(tagId, rfidVel);
+                tagLastTime.Add(tagId, timeReal);
+            }
+            lastTagTime = timeReal;
+        }
+
+        // Write into a txt file
+        public static void Write_file(string tagId, double Ant_2, double API_DFS_2, double velocity, double time)
+        {
+            FileStream file = new FileStream(fileName, FileMode.Append);
             StreamWriter writer = new StreamWriter(file, Encoding.Default);
 
-            writer.WriteLine("{0},{1},{2}",
-            portNumber, DFS, time-startTime);
+            var time2 = GetMbtaDateTime(time);
 
-            Console.WriteLine("{0},{1},{2}",
-            portNumber, DFS, time-startTime);
+            writer.WriteLine("{0},{1},{2},{3},{4}",
+            tagId, Ant_2, API_DFS_2, velocity, time2.ToString(@"yyyy-MM-dd HH:mm:ss:fff"));
+
+            //Console.WriteLine("{0},{1},{2},{3},{4}",
+            //tagId, Ant_2, API_DFS_2, velocity, time2.ToString(@"yyyy-MM-dd HH:mm:ss:fff"));
 
             writer.Close();
             file.Close();
         }
+
+        public static DateTime FromUnixTime(long unixTime)
+        {
+            unixTime = unixTime / 1000;
+            var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Local);
+            return epoch.AddMilliseconds(unixTime - TIME_DIFFERENCE);
+        }
+
+        public static DateTime GetMbtaDateTime(double unixTimestamp)
+        {
+            unixTimestamp = unixTimestamp / 1000;
+            DateTimeZone mbtaTimeZone = DateTimeZoneProviders.Tzdb["America/New_York"];
+            DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var mbtaEpochTime = epoch.AddMilliseconds(unixTimestamp);
+            var instant = Instant.FromUtc(mbtaEpochTime.Year, mbtaEpochTime.Month,
+                mbtaEpochTime.Day, mbtaEpochTime.Hour, mbtaEpochTime.Minute, mbtaEpochTime.Second);
+            var nodaTime = instant.InZone(mbtaTimeZone);
+
+            return nodaTime.ToDateTimeUnspecified().AddMilliseconds(mbtaEpochTime.Millisecond);
+        }
+
+
 
         public void RFID_stop_recording()
         {
@@ -363,5 +467,39 @@ namespace RFID_Beta_5
             reader.Stop();
             reader.Disconnect();
         }
+
+        // modified for multiple reader intances
+        public void Stop()
+        {
+
+            if (reader.IsConnected)
+            {
+                try
+                {
+                    reader.Stop();
+                    reader.Disconnect();
+                    Console.WriteLine(reader.Name.ToString() + "stoped in RFID");
+                    //ErrorLog.LogSystemEvent(reader.Name.ToString() + "stoped in RFID");
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    //ErrorLog.LogSystemError(e.Message);
+                }
+                finally
+                {
+                    //if (reader.IsConnected)
+                    //{
+                    //    reader.Stop();
+                    //    Console.WriteLine(reader.Name.ToString() + "stoped in RFID");
+                    //    ErrorLog.LogSystemEvent(reader.Name.ToString() + "stoped in RFID");
+                    //}
+                }
+
+            }
+        }
+        //ErrorLog.LogSystemEvent("All RFID iS Stopped");
+        //ErrorLog.EndLog();
+
     }
 }

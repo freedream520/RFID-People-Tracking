@@ -5,6 +5,10 @@ VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "People Tracking", "RFID Beta 5\People Tracking.csproj", "{DEF1C838-BD0D-49B9-96AF-4237A3281C36}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeopleTrackingGui", "PeopleTrackingGui\PeopleTrackingGui.csproj", "{DE4302E4-C038-4C90-8D19-E0723B0569A6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "peopleMatch", "peopleMatch\peopleMatch.csproj", "{116D9731-5CF8-4BD9-830D-99172E9C05A6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,14 @@ Global
 		{DEF1C838-BD0D-49B9-96AF-4237A3281C36}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DEF1C838-BD0D-49B9-96AF-4237A3281C36}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DEF1C838-BD0D-49B9-96AF-4237A3281C36}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DE4302E4-C038-4C90-8D19-E0723B0569A6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DE4302E4-C038-4C90-8D19-E0723B0569A6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DE4302E4-C038-4C90-8D19-E0723B0569A6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DE4302E4-C038-4C90-8D19-E0723B0569A6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{116D9731-5CF8-4BD9-830D-99172E9C05A6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{116D9731-5CF8-4BD9-830D-99172E9C05A6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{116D9731-5CF8-4BD9-830D-99172E9C05A6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{116D9731-5CF8-4BD9-830D-99172E9C05A6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
