@@ -50,7 +50,7 @@ namespace ActivityRecognition
 
         public bool matched;
 
-        public string tagId="xxxx";
+        public string tagId="unKnown";
 
         public double tagSkeletonDis=-1;
 

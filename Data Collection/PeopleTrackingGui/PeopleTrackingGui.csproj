@@ -35,6 +35,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="AmCharts.Windows.QuickCharts, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\amChartsQuickCharts.1.1\lib\net35\AmCharts.Windows.QuickCharts.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Impinj.OctaneSdk">
       <HintPath>..\..\..\..\..\..\..\People_Tracking_RFID\Data Collection\RFID Beta 5\bin\Debug\Impinj.OctaneSdk.dll</HintPath>
     </Reference>
@@ -73,9 +77,11 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.configuration" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Numerics" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Core" />
@@ -95,7 +101,14 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="BodyOrientation.cs" />
+    <Compile Include="Correlation.cs" />
+    <Compile Include="DataXY.cs" />
     <Compile Include="DTWSimple.cs" />
+    <Compile Include="dtw\DistanceMeasure.cs" />
+    <Compile Include="dtw\Dtw.cs" />
+    <Compile Include="dtw\IDtw.cs" />
+    <Compile Include="dtw\IPreprocessor.cs" />
+    <Compile Include="dtw\SeriesVariable.cs" />
     <Compile Include="Person.cs" />
     <Compile Include="Plot.cs" />
     <Compile Include="Record.cs" />
@@ -150,6 +163,7 @@
     <Resource Include="Image\Icon_Add.png" />
     <Resource Include="Image\Icon_Setting.png" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

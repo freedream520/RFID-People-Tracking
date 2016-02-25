@@ -7,7 +7,7 @@ using System.Windows;
 
 namespace PeopleTrackingGui
 {
-    class SkeletonPosition
+    public class SkeletonPosition
     {
         public ulong skeletonId;
 

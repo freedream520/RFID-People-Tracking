@@ -11,7 +11,10 @@ using ActivityRecognition;
 using RFID_Beta_5;
 using MathNet.Filtering.Median;
 using System.IO;
-//ddd
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Configuration;
+//ddds
 namespace PeopleTrackingGui
 {
     /// <summary>
@@ -102,10 +105,10 @@ namespace PeopleTrackingGui
         /// </summary>
         private bool isRFIDRequired = true;
 
-        /// <summary>
-        /// A thread for RFID system
-        /// </summary>
-        private Thread rfidThread;
+        ///// <summary>
+        ///// A thread for RFID system
+        ///// </summary>
+        //private Thread rfidThread;
 
         /// <summary>
         /// RFID reader reference
@@ -128,26 +131,13 @@ namespace PeopleTrackingGui
         System.Timers.Timer recordStop;
         private static readonly double RECORD_STOP_INTERVAL = 1000 * 10; // Millisecond
 
-        /// <summary>
-        /// Timer for restarting the application
-        /// </summary>
-        System.Timers.Timer applicationRestart;
-
-        System.Timers.Timer updateBackground;
-
-        private static readonly double APPLICATION_RESTART_INTERVAL = 1000 * 60 * 90; // Millisecond
-
-        private static readonly double UPDATE_BACKGROUND_INTERVAL = 1000 * 60 * 0.1; // Millisecond
 
         /// <summary>
         /// Check if it is in the record stop period
         /// </summary>
         private bool isStoppingRecord = false;
 
-        /// <summary>
-        /// Used for shuting down application in UI thread from a background thread
-        /// </summary>
-        private bool isDownApplication = false;
+
 
         /// <summary>
         /// Status for starting to find templates
@@ -186,18 +176,9 @@ namespace PeopleTrackingGui
         private DrawingGroup drawingGroup_topView;
 
         /// <summary>
-        /// Timer for reset template position found
-        /// </summary>
-        private System.Timers.Timer templateSearch;
-        private static readonly double TEMPLATE_SEARCH_INTERVAL = 1000 * 2; // Millisecond
-
-        /// <summary>
         /// Thread for RFID
         /// </summary>
         private Thread rfid_Thread;
-
-
-        private bool restartStarted;
 
         /// <summary>
         /// list of all the buttons
@@ -219,11 +200,12 @@ namespace PeopleTrackingGui
 
         private List<FrameworkElement> pageMargin;
 
-        private System.Timers.Timer personMatch;
+
 
         private static readonly double PERSON_MATCH_INTERVAL = 1000 * 5; // Millisecond
 
-        private Dictionary<ulong, SkeletonPosition> skeletonList;
+        public Dictionary<ulong, SkeletonPosition> skeletonList;
+
 
         private Dictionary<ulong, double> lastSkeletonDistance;
 
@@ -231,7 +213,35 @@ namespace PeopleTrackingGui
 
         private Dictionary<ulong, KeyValuePair<string, double>> optMatch;
 
+        private ObservableCollection<DataXY> _data = new ObservableCollection<DataXY>();
+        public ObservableCollection<DataXY> Data { get { return _data; } }
 
+        public delegate void changeGraphHandler(double tagVelocity, double tag2Velocity);
+        public delegate void getSkeletonPositionHandler();
+
+        public int test = 0;
+
+        private Dictionary<ulong, double> skeletonDis;
+
+        public bool kinectStarted = false;
+
+        public Thread match;
+
+        public double distanceThrechhood = 0.5;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public readonly double THRESHOlD_STATIC = 50;
+
+        public class DataXY
+        {
+            public string cat1 { get; set; }
+            public double val1 { get; set; }
+            public double val2 { get; set; }
+            public double val3 { get; set; }
+            public double val4 { get; set; }
+        }
 
         public void ShutDownApplication()
         {
@@ -299,7 +309,7 @@ namespace PeopleTrackingGui
 
             pageMargin.Add(RoomLayout);
             pageMargin.Add(DepthFrame);
-
+            pageMargin.Add(TopView);
             skeletonList = new Dictionary<ulong, SkeletonPosition>();
             lastSkeletonDistance = new Dictionary<ulong, double>();
 
@@ -307,6 +317,17 @@ namespace PeopleTrackingGui
 
             optMatch = new Dictionary<ulong, KeyValuePair<string, double>>();
             //DepthButton.Background = Brushes.Yellow;
+
+            skeletonDis = new Dictionary<ulong, double>();
+
+            //match = new Thread(new ThreadStart(this.skeletonMatch));
+
+            this.DataContext = this;
+            for (int i = 60; i > 0; i--)
+            {
+                DateTime dt = new DateTime(DateTime.Now.Ticks - TimeSpan.FromSeconds(i).Ticks);
+                _data.Add(new DataXY() { cat1 = dt.ToString("HH:mm:ss"), val1 = 0, val2 = 0, val3 = 0, val4 = 0 });
+            }
         }
 
 
@@ -387,7 +408,6 @@ namespace PeopleTrackingGui
 
 
                                     isFindingTemplate = false;
-                                    templateSearch.Start();
 
                                 }
 
@@ -466,93 +486,78 @@ namespace PeopleTrackingGui
                                     Record();
                                 }
 
-                                if (RFID.frameCounter >= 300)
+                                if (RFID.frameCounter >= 100)
                                 {
-
-                                    //foreach (KeyValuePair<ulong, SkeletonPosition> entry in skeletonList)
-                                    //{
-                                    //    entry.Value.relDistance.Add(RFID.lastTagTime, 0);
-                                    //}
-
-                                    skeletonMatch();
 
                                     RFID.frameCounter = 0;
-
-
-                                    //skeletonList.Clear();
-                                    //RFID.RfidVelocityList.Clear();
-
-                                    //RFID.tagLastTime.Clear();
-
-                                    //lastSkeletonDistance.Clear();
-                                }
-
-                                if (RFID.totalCounter >= 1000)
-                                {
-
-                                    checkMatch();
+                                    // AsyncTask
+                                    BackgroundWorker worker = new BackgroundWorker();
+                                    worker.WorkerReportsProgress = true;
+                                    worker.DoWork += skeletonMatch;
+                                    worker.RunWorkerAsync();
 
                                 }
+
                             }
                         }
                     }
                 }
+                kinectStarted = true;
             }
         }
+
+
 
         private void checkMatch()
         {
             //the list to record the skeletonId that need to be removed because when we iterate the dictionary, we cannot do any operate to it like remove or add it.
             List<ulong> skeletonToRemove = new List<ulong>();
-
-            foreach (KeyValuePair<ulong, KeyValuePair<string, double>> match in optMatch)
+            lock (skeletonList)
             {
-
-                if (skeletonList.ContainsKey(match.Key))
+                foreach (KeyValuePair<ulong, KeyValuePair<string, double>> match in optMatch)
                 {
 
-                    double[] skeletonDis = new double[skeletonList[match.Key].relDistance.Count];
-
-                    int i = 0;
-                    foreach (KeyValuePair<DateTime, double> relDis in skeletonList[match.Key].relDistance)
+                    if (skeletonList.ContainsKey(match.Key))
                     {
-                        skeletonDis[i] = relDis.Value;
-                        i++;
+
+                        double[] skeletonDis = new double[skeletonList[match.Key].relDistance.Count];
+
+                        int i = 0;
+                        foreach (KeyValuePair<DateTime, double> relDis in skeletonList[match.Key].relDistance)
+                        {
+                            skeletonDis[i] = relDis.Value;
+                            i++;
+                        }
+                        OnlineMedianFilter filter = new OnlineMedianFilter(5);
+
+                        skeletonDis = filter.ProcessSamples(skeletonDis);
+
+
+                        int j = 0;
+                        double[] rfidVe = new double[RFID.RfidDistanceList[match.Value.Key].distance.Count];
+                        foreach (KeyValuePair<DateTime, double> rfidDis in RFID.RfidDistanceList[match.Value.Key].distance)
+                        {
+                            rfidVe[j] = rfidDis.Value;
+                            j++;
+                        }
+
+                        //NDtw.Dtw dtw = new NDtw.Dtw(skeletonDis, rfidVe);
+                        Correlation c = new Correlation();
+                        double dtwDis = Math.Abs(c.ComputeCoeff(skeletonDis, rfidVe));
+
+                        if (dtwDis < distanceThrechhood)
+                        {
+                            skeletonToRemove.Add(match.Key);
+                        }
+
                     }
-                    OnlineMedianFilter filter = new OnlineMedianFilter(5);
+                    else {
 
-                    skeletonDis = filter.ProcessSamples(skeletonDis);
-
-
-                    int j = 0;
-                    double[] rfidVe = new double[RFID.RfidVelocityList[match.Value.Key].velocity.Count];
-                    foreach (KeyValuePair<DateTime, double> rfidDis in RFID.RfidVelocityList[match.Value.Key].velocity)
-                    {
-                        rfidVe[j] = rfidDis.Value;
-                        j++;
-                    }
-
-                    DTW.SimpleDTW dtw = new DTW.SimpleDTW(skeletonDis, rfidVe);
-
-                    dtw.computeFForward();
-
-                    double dtwDis = dtw.computeFForward();
-
-                    dtwDis = dtwDis / Math.Sqrt(skeletonDis.Length * skeletonDis.Length + rfidVe.Length * rfidVe.Length);
-
-                    if (dtwDis > 0.5)
-                    {
                         skeletonToRemove.Add(match.Key);
+
                     }
 
                 }
-                else {
-
-                    skeletonToRemove.Add(match.Key);
-
-                }
-
-
             }
 
             //remove the skeletonMatches which have higher distance
@@ -561,69 +566,244 @@ namespace PeopleTrackingGui
                 optMatch.Remove(skeletonDelete);
             }
 
-            skeletonList.Clear();
-            RFID.RfidVelocityList.Clear();
+            foreach (Person person in persons)
+            {
+                if (optMatch.ContainsKey(person.ID))
+                {
+                    person.tagId = ConfigurationManager.AppSettings[optMatch[person.ID].Key];
+                    person.dis = optMatch[person.ID].Value;
+                }
+                else {
+                    person.tagId = "unKnown";
+                }
 
-            RFID.tagLastTime.Clear();
+            }
 
-            lastSkeletonDistance.Clear();
-            RFID.totalCounter = 0;
+            resetDoppler();
 
         }
 
-        private void skeletonMatch()
+        private void skeletonMatch(object sender, DoWorkEventArgs e)
         {
 
+            lock (skeletonList)
+            {
+                //writeSkeletonAndRfid();
+                writeSkeletonAndRfid();
+
+                if (RFID.totalCounter >= 300)
+                {
+                    checkMatch();
+                    RFID.totalCounter = 0;
+                }
+                else {
+
+                    List<string> tagStatic = new List<string>();
+                    List<ulong> skeletonStatic = new List<ulong>();
+
+                    seperateStaticSkeleton(skeletonList, skeletonStatic);
+                    seperateStaticTag(RFID.RfidDistanceList, tagStatic);
+
+                    foreach (KeyValuePair<ulong, SkeletonPosition> skeletonEntry in skeletonList)
+                    {
+                        if (!optMatch.ContainsKey(skeletonEntry.Key))
+                        {
+
+                            double[] skeletonDis = generateSequence(skeletonEntry.Value.relDistance);
+
+                            //Console.WriteLine("deviation of skeleton "+ skeletonEntry.Key+" is " + Correlation.deviation(skeletonDis));
 
 
-            bool hasWrittenrfid = false;
+                            //if (Correlation.deviation(skeletonDis) <= THRESHOlD_STATIC) {
+                            //    skeletonStatic.Add(skeletonEntry.Key);
+                            //    continue;
+                            //}
+
+                            //if (skeletonStatic.Contains(skeletonEntry.Key)) {
+                            //    continue;
+                            //}
+
+                            foreach (KeyValuePair<string, RfidVelocity> rfidVelocityEntry in RFID.RfidDistanceList)
+                            {
+                                //int j = 0;
+                                double[] rfidVe = generateSequence(rfidVelocityEntry.Value.distance);
+
+                                Correlation c = new Correlation();
+
+                                Console.WriteLine("deviation of tag " + rfidVelocityEntry.Key + " is " + Correlation.deviation(rfidVe));
+
+                                if (tagStatic.Contains(rfidVelocityEntry.Key))
+                                {
+                                    continue;
+                                }
+
+                                ////status of this tag(static or not)
+                                //if (Correlation.deviation(rfidVe)<= THRESHOlD_STATIC) {
+
+                                //    if (tagStatic.Contains(rfidVelocityEntry.Key)) {
+                                //        tagStatic.Add(rfidVelocityEntry.Key);
+                                //    }
+                                //    continue;
+                                //}
+
+                                double dtwDis = Math.Abs(c.ComputeCoeff(skeletonDis, rfidVe));
+
+                                //dtwDis = dtwDis / dtw.GetPath().Length;
+
+                                Console.WriteLine(skeletonEntry.Key + " with" + rfidVelocityEntry.Key + "has " + dtwDis + " distance");
+
+                                if (optMatch.ContainsKey(skeletonEntry.Key))
+                                {
+                                    if (optMatch[skeletonEntry.Key].Value < dtwDis)
+                                    {
+                                        optMatch[skeletonEntry.Key] = new KeyValuePair<string, double>(rfidVelocityEntry.Key, dtwDis);
+                                    }
+                                }
+                                else if (dtwDis >= distanceThrechhood)
+                                {
+                                    optMatch.Add(skeletonEntry.Key, new KeyValuePair<string, double>(rfidVelocityEntry.Key, dtwDis));
+                                }
+
+
+                            }
+
+                            //hasWrittenrfid = true;
+                        }
+                    }
+
+                    foreach (ulong skeletonId in skeletonStatic)
+                    {
+                        double[] skeletonDis = generateSequence(skeletonList[skeletonId].relDistance);
+
+                        foreach (string tagId in tagStatic)
+                        {
+                            double[] rfidDis = generateSequence(RFID.RfidDistanceList[tagId].distance);
+
+                            //double meanDeviation=Correlation.meanDeviation(skeletonDis, rfidDis);
+
+                            if (optMatch.ContainsKey(skeletonId))
+                            {
+                            }
+                            else {
+                                optMatch.Add(skeletonId, new KeyValuePair<string, double>(tagId, 1));
+                            }
+                        }
+
+                    }
+
+                    foreach (Person person in persons)
+                    {
+                        if (optMatch.ContainsKey(person.ID))
+                        {
+                            person.tagId = ConfigurationManager.AppSettings[optMatch[person.ID].Key];
+                            person.dis = optMatch[person.ID].Value;
+                        }
+                        else {
+                            person.tagId = "unKnown";
+                        }
+
+                    }
+                    skeletonList.Clear();
+                    RFID.RfidDistanceList.Clear();
+
+                    lastSkeletonDistance.Clear();
+
+                }
+
+            }
+
+
+
+        }
+
+        private void seperateStaticSkeleton(Dictionary<ulong, SkeletonPosition> skeletonList, List<ulong> skeletonStatic)
+        {
+
             foreach (KeyValuePair<ulong, SkeletonPosition> skeletonEntry in skeletonList)
             {
-                if (!optMatch.ContainsKey(skeletonEntry.Key))
+                double[] skeletonDis = generateSequence(skeletonEntry.Value.relDistance);
+
+                if (Correlation.deviation(skeletonDis) <= THRESHOlD_STATIC)
                 {
+                    skeletonStatic.Add(skeletonEntry.Key);
+                }
 
-                    double[] skeletonDis = new double[skeletonEntry.Value.relDistance.Count];
+            }
 
-                    int i = 0;
-                    foreach (KeyValuePair<DateTime, double> relDis in skeletonEntry.Value.relDistance)
+            //foreach (ulong id in skeletonStatic) {
+            //    skeletonList.Remove(id);
+            //}
+        }
+
+        private void seperateStaticTag(Dictionary<string, RfidVelocity> RfidDistanceList, List<string> tagStatic)
+        {
+
+            foreach (KeyValuePair<string, RfidVelocity> rfidVelocityEntry in RfidDistanceList)
+            {
+                //int j = 0;
+                double[] rfidVe = generateSequence(rfidVelocityEntry.Value.distance);
+                //status of this tag(static or not)
+                if (Correlation.deviation(rfidVe) <= THRESHOlD_STATIC)
+                {
+                    tagStatic.Add(rfidVelocityEntry.Key);
+                }
+
+                //foreach (string id in tagStatic) {
+                //    RfidDistanceList.Remove(id);
+                //}
+
+            }
+        }
+
+        private void writeSkeletonAndRfid()
+        {
+            test++;
+            if (test % 2 == 0)
+            {
+                lock (skeletonList) lock (RFID.RfidDistanceList)
                     {
-                        skeletonDis[i] = relDis.Value;
-                        i++;
-                    }
-
-                    OnlineMedianFilter filter = new OnlineMedianFilter(5);
-
-                    skeletonDis = filter.ProcessSamples(skeletonDis);
-
-                    for (int k = 0; k < skeletonDis.Length; k++)
-                    {
-                        using (StreamWriter writer = new StreamWriter(@"C:\Users\Dongyang\Desktop\" + skeletonEntry.Key + ".txt", true))
+                        foreach (KeyValuePair<ulong, SkeletonPosition> skeletonEntry in skeletonList)
                         {
-                            writer.WriteLine("{0}", skeletonDis[k]);
+                            double[] skeletonDis = new double[skeletonEntry.Value.relDistance.Count];
+
+                            int i = 0;
+                            foreach (KeyValuePair<DateTime, double> relDis in skeletonEntry.Value.relDistance)
+                            {
+                                skeletonDis[i] = relDis.Value;
+                                i++;
+                            }
+
+                            OnlineMedianFilter filter = new OnlineMedianFilter(5);
+
+                            skeletonDis = filter.ProcessSamples(skeletonDis);
+
+                            for (int k = 0; k < skeletonDis.Length; k++)
+                            {
+                                using (StreamWriter writer = new StreamWriter(@"C:\Users\Dongyang\Desktop\" + skeletonEntry.Key + ".txt", true))
+                                {
+                                    writer.WriteLine("{0}", skeletonDis[k]);
+                                }
+                            }
                         }
-                    }
 
-
-                    foreach (KeyValuePair<string, RfidVelocity> rfidVelocityEntry in RFID.RfidVelocityList)
-                    {
-                        int j = 0;
-                        double[] rfidVe = new double[rfidVelocityEntry.Value.velocity.Count];
-
-                        foreach (KeyValuePair<DateTime, double> rfidDis in rfidVelocityEntry.Value.velocity)
+                        foreach (KeyValuePair<string, RfidVelocity> rfidVelocityEntry in RFID.RfidDistanceList)
                         {
-                            rfidVe[j] = rfidDis.Value;
-                            j++;
+                            int j = 0;
+                            double[] rfidVe = new double[rfidVelocityEntry.Value.distance.Count];
+
+                            foreach (KeyValuePair<DateTime, double> rfidDis in rfidVelocityEntry.Value.distance)
+                            {
+                                rfidVe[j] = rfidDis.Value;
+                                j++;
 
 
 
-                        }
+                            }
 
-                        OnlineMedianFilter o = new OnlineMedianFilter(5);
+                            OnlineMedianFilter o = new OnlineMedianFilter(5);
 
-                        rfidVe = o.ProcessSamples(rfidVe);
+                            rfidVe = o.ProcessSamples(rfidVe);
 
-                        if (!hasWrittenrfid)
-                        {
                             for (int k = 0; k < rfidVe.Length; k++)
                             {
                                 using (StreamWriter writer = new StreamWriter(@"C:\Users\Dongyang\Desktop\" + rfidVelocityEntry.Key + ".txt", true))
@@ -631,78 +811,14 @@ namespace PeopleTrackingGui
                                     writer.WriteLine("{0}", rfidVe[k]);
                                 }
                             }
-
                         }
-
-
-
-
-
-
-                        DTW.SimpleDTW dtw = new DTW.SimpleDTW(skeletonDis, rfidVe);
-
-                        //double[,] matrix = dtw.getFMatrix();
-
-                        //int sequenceLength=findSequenceLength(matrix, -1);
-
-                        double dtwDis = dtw.computeFForward();
-
-                        dtwDis = dtwDis / Math.Sqrt(skeletonDis.Length * skeletonDis.Length + rfidVe.Length * rfidVe.Length);
-
-                        Console.WriteLine(skeletonEntry.Key + " with" + rfidVelocityEntry.Key + "has " + dtwDis + " distance");
-
-                        if (optMatch.ContainsKey(skeletonEntry.Key))
-                        {
-                            if (optMatch[skeletonEntry.Key].Value > dtwDis)
-                            {
-                                optMatch[skeletonEntry.Key] = new KeyValuePair<string, double>(rfidVelocityEntry.Key, dtwDis);
-                            }
-                        }
-                        else if (dtwDis <= 0.5)
-                        {
-                            optMatch.Add(skeletonEntry.Key, new KeyValuePair<string, double>(rfidVelocityEntry.Key, dtwDis));
-                        }
-
 
                     }
-
-                    hasWrittenrfid = true;
-                }
-            }
-
-            foreach (Person person in persons)
-            {
-                if (optMatch.ContainsKey(person.ID))
-                {
-                    person.tagId = optMatch[person.ID].Key;
-                    person.dis = optMatch[person.ID].Value;
-                }
-                else {
-                    person.tagId = "xxx";
-                }
-                //if (opt.Key == person.ID)
-                //{
-                //    person.tagId = opt.Value.Key;
-                //    break;
-                //}
+                return;
             }
 
         }
 
-        //private int findSequenceLength(double[,] a,int n) {
-        //    int count = 0;
-
-        //    for (int i = a.GetLowerBound(0); i < a.GetUpperBound(0); i++) {
-
-        //        for (int j = a.GetLowerBound(1); j < a.GetUpperBound(1); j++) {
-        //            if (a[i, j] == -1) {
-        //                count++;
-        //            }
-        //        }
-        //    }
-
-        //    return count;
-        //}
 
         private void RecordSkeletonPosition()
         {
@@ -719,6 +835,8 @@ namespace PeopleTrackingGui
 
                     double distance = Transformation.PointDistance(kinectPosition, bodyPosition);
 
+
+
                     if (skeletonList.ContainsKey(bodies[i].TrackingId) && lastSkeletonDistance.ContainsKey(bodies[i].TrackingId))
                     {
 
@@ -726,12 +844,26 @@ namespace PeopleTrackingGui
                         //relative distance to last time
                         double relDistance = lastSkeletonDistance[bodies[i].TrackingId] - distance;
 
-                        if (relDistance >= 3 || relDistance <= -3)
+                        //if (relDistance >= 3 || relDistance <= -3)
+                        //{
+                        //    relDistance = 0;
+                        //}
+
+                        //record every skeleton's position
+                        lock (skeletonDis)
                         {
-                            relDistance = 0;
+
+                            if (skeletonDis.ContainsKey(bodies[i].TrackingId))
+                            {
+                                skeletonDis[bodies[i].TrackingId] += relDistance;
+                            }
+                            else {
+                                skeletonDis.Add(bodies[i].TrackingId, relDistance);
+                            }
                         }
 
-                        skeletonList[bodies[i].TrackingId].relDistance.Add(DateTime.Now, relDistance);
+
+                        //skeletonList[bodies[i].TrackingId].relDistance.Add(DateTime.Now, relDistance);
 
                         lastSkeletonDistance[bodies[i].TrackingId] = distance;
 
@@ -769,7 +901,7 @@ namespace PeopleTrackingGui
         public void Record()
         {
 
-            ActivityRecognition.Record.RecordPosition(persons);
+            //ActivityRecognition.Record.RecordPosition(persons);
             //ActivityRecognition.Record.RecordJoints(bodies, true);
         }
 
@@ -827,7 +959,7 @@ namespace PeopleTrackingGui
                     ActivityRecognition.Record.StartTime = DateTime.Now.ToString("M-d-yyyy_HH-mm-ss");
 
                     //if (objectDetector == null) objectDetector = new ObjectDetector(ListBox_Object, ListView_Object);
-                    if (rfidReader == null) rfidReader = new RFID();
+                    if (rfidReader == null) rfidReader = new RFID(this);
 
                     if (isRFIDRequired)
                     {
@@ -843,25 +975,12 @@ namespace PeopleTrackingGui
 
                     }
 
-                    //if (!restartStarted)
-                    //{
 
-                    //    applicationRestart.AutoReset = false;
-                    //    applicationRestart.Elapsed += ApplicationRestart_Elapsed;
-                    //    applicationRestart.Interval = APPLICATION_RESTART_INTERVAL;
-                    //    applicationRestart.Enabled = true;
-                    //    restartStarted = true;
-
-                    //}
-                    //else {
-                    //    applicationRestart.Stop();
-                    //    applicationRestart.Start();
-                    //}
 
                 }
                 else {
 
-                    restartStarted = true;
+                    //restartStarted = true;
                 }
 
 
@@ -873,7 +992,7 @@ namespace PeopleTrackingGui
 
 
             // Stop recording while the moving person < 1
-            if (Transformation.GetNumberOfPeople(persons) < 1)
+            if (Transformation.GetNumberOfPeople(persons) < 0)
             {
 
 
@@ -883,7 +1002,7 @@ namespace PeopleTrackingGui
                     if (!isStoppingRecord)
                     {
                         isStoppingRecord = true;
-                        //ErrorLog.LogSystemEvent("Try to stop RFID system because nobody is in the room");
+
                         recordStop = new System.Timers.Timer();
                         recordStop.AutoReset = false;
                         recordStop.Elapsed += RecordStop_Elapsed;
@@ -970,19 +1089,10 @@ namespace PeopleTrackingGui
             if (multiSourceFrameReader != null) multiSourceFrameReader.Dispose();
             if (kinectSensor != null) kinectSensor.Close();
 
-            // Object detector - RFID
-            //if (objectDetector != null)
-            //{
-            //    if (objectDetector.Reader != null)
-            //    {
-            //        if (objectDetector.Reader.IsConnected) objectDetector.Stop();
-            //    }
-            //    if (rfidThread != null) rfidThread.Abort();
-            //}
+
 
             if (rfidReader != null)
             {
-                //ErrorLog.LogSystemEvent("Try to stop RFID system because main window is closed by user");
                 if (rfidReader != null)
                 {
                     RFID.IsRFIDOpen = false;
@@ -991,11 +1101,6 @@ namespace PeopleTrackingGui
                 if (rfid_Thread != null) rfid_Thread.Abort();
             }
 
-
-
-
-            //ErrorLog.LogSystemEvent("System is now shutting down");
-            //ErrorLog.EndLog();
         }
 
         /// <summary>
@@ -1022,27 +1127,7 @@ namespace PeopleTrackingGui
         /// <param name="e"></param>
         private void Canvas_MouseMove(object sender, MouseEventArgs e)
         {
-            //if (isMouseDown)
-            //{
-            //    Point currentMousePosition = e.GetPosition(Canvas_Position_Foreground);
 
-            //    double width = currentMousePosition.X - mouseDownPosition.X;
-            //    double height = currentMousePosition.Y - mouseDownPosition.Y;
-
-            //    if (width > 0) Rectangle_SelectArea.Width = width;
-            //    else
-            //    {
-            //        Rectangle_SelectArea.Width = -width;
-            //        Canvas.SetLeft(Rectangle_SelectArea, currentMousePosition.X);
-            //    }
-
-            //    if (height > 0) Rectangle_SelectArea.Height = height;
-            //    else
-            //    {
-            //        Rectangle_SelectArea.Height = -height;
-            //        Canvas.SetTop(Rectangle_SelectArea, currentMousePosition.Y);
-            //    }
-            //}
         }
 
         /// <summary>
@@ -1113,60 +1198,7 @@ namespace PeopleTrackingGui
             Popup_Settings.IsOpen = false;
         }
 
-        ///// <summary>
-        ///// Popup the view to display the top view in height
-        ///// For template detection
-        ///// </summary>
-        ///// <param name="sender"></param>
-        ///// <param name="e"></param>
-        //private void Button_ShowHeight(object sender, RoutedEventArgs e)
-        //{
-        //    //Popup_Area.IsOpen = true;
 
-        //    UpdateButtonColor(HeightViewButton);
-        //    UpdateWindowStatement(TopView);
-        //}
-
-        //private void Button_ShowDepth(object sender, RoutedEventArgs e)
-        //{
-        //    //RootCanvas.Visibility = Visibility.Hidden;
-        //    UpdateButtonColor(DepthButton);
-        //    UpdateWindowStatement(DepthFrame);
-        //}
-
-        //private void Button_ShowRoomLayout(object sender, RoutedEventArgs e)
-        //{
-        //    UpdateButtonColor(RoomLayoutButton);
-        //    UpdateWindowStatement(MotherRootCanvas);
-        //}
-
-        //private void UpdateButtonColor(Button btnClicked) {
-        //    foreach (Button button in btnList)
-        //    {
-        //        if (button != btnClicked)
-        //        {
-        //            button.Background = Brushes.White;
-        //        }
-        //        else {
-        //            button.Background = Brushes.Yellow;
-        //        }
-        //    }
-        //}
-
-        //private void UpdateWindowStatement(UIElement showUI) {
-
-        //    foreach (UIElement ui in windowsList) {
-
-        //        if (ui != showUI)
-        //        {
-        //            ui.Visibility = Visibility.Hidden;
-        //        }
-        //        else {
-        //            ui.Visibility = Visibility.Visible;
-        //        }
-        //    }
-
-        //}
 
         private void MainMouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -1239,16 +1271,79 @@ namespace PeopleTrackingGui
 
         }
 
+        public void showGraph(double tagVelocity, double tag2Velocity)
+        {
+            try
+            {
+                changeGraphHandler d = updateGraph;
+                this.Dispatcher.Invoke(d, new Object[] { tagVelocity, tag2Velocity });
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+            }
+
+        }
+
+        public void updateGraph(double tagVelocity, double tag2Velocity)
+        {
+
+            _data.Add(new DataXY() { cat1 = DateTime.Now.ToString("HH:mm:ss"), val1 = tagVelocity, val2 = tag2Velocity, val3 = 3, val4 = -3 });
+            if (_data.Count > 60)
+            {
+                _data.RemoveAt(0);
+            }
+
+        }
+
+        public Dictionary<ulong, Point> getSkeletonPosition()
+        {
 
 
 
+            return null;
+        }
+
+        public Dictionary<ulong, double> searchSkeletonPosition()
+        {
+            return skeletonDis;
+        }
+
+        /// <summary>
+        /// After check the already match, reset the skeletonList, rfidDistanceList, etc. 
+        /// </summary>
+        private void resetDoppler()
+        {
+            lock (skeletonList) lock (RFID.RfidDistanceList)
+                {
+                    skeletonList.Clear();
+                    RFID.RfidDistanceList.Clear();
+
+                    //RFID.tagLastTime.Clear();
+
+                    lastSkeletonDistance.Clear();
+                    RFID.totalCounter = 0;
+
+                    kinectStarted = false;
+                    RFID.hasTagReported = false;
+                }
+        }
+
+        //generate the sequence 
+        private double[] generateSequence(Dictionary<DateTime, double> timeSequence)
+        {
+
+            double[] sequence = new double[timeSequence.Count];
+            int i = 0;
+            foreach (KeyValuePair<DateTime, double> pair in timeSequence)
+            {
+                sequence[i] = pair.Value;
+                i++;
+            }
+
+            return sequence;
+        }
 
 
-
-
-        //private void ListView_Object_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        //{
-
-        //}
     }
 }

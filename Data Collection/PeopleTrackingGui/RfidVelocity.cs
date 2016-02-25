@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace PeopleTrackingGui
 {
-    class RfidVelocity
+    public class RfidVelocity
     {
-        public Dictionary<DateTime, double> velocity;
+        public Dictionary<DateTime, double> distance;
 
         public RfidVelocity() {
-            velocity = new Dictionary<DateTime, double>();
+            distance = new Dictionary<DateTime, double>();
         }
     }
 }
