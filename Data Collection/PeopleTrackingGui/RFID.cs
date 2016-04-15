@@ -173,7 +173,14 @@ namespace RFID_Beta_5
                             if (RfidDistanceList.ContainsKey(velocity.Key))
                             { 
                                 if (!RfidDistanceList[velocity.Key].distance.ContainsKey(DateTime.Now)) {
-                                    RfidDistanceList[velocity.Key].distance.Add(DateTime.Now, distance);
+                                    try
+                                    {
+                                        RfidDistanceList[velocity.Key].distance.Add(DateTime.Now, distance);
+                                    }
+                                    catch (Exception ex) {
+                                        Console.WriteLine(ex.ToString());
+                                    }
+                                    
                                 }
                             }
                             else
@@ -182,7 +189,7 @@ namespace RFID_Beta_5
                                 RfidDistanceList[velocity.Key].distance.Add(DateTime.Now, distance);
                             }
 
-                            if (velocity.Key == "0908 2014 9630 0000 0000 6669")
+                            if (velocity.Key == "0908 2014 9630 0000 0000 666A")
                             {
                                 dis1 = distance;
                             }
@@ -202,8 +209,14 @@ namespace RFID_Beta_5
 
                         dis2 = distance.Value;
                         if (m.skeletonList.ContainsKey(distance.Key)) {
-                            if(!m.skeletonList[distance.Key].relDistance.ContainsKey(DateTime.Now))
-                                m.skeletonList[distance.Key].relDistance.Add(DateTime.Now, distance.Value);
+                            if (!m.skeletonList[distance.Key].relDistance.ContainsKey(DateTime.Now))
+                                try {
+                                    m.skeletonList[distance.Key].relDistance.Add(DateTime.Now, distance.Value);
+                                }
+                                catch (Exception ex) {
+
+                                }
+                                
                         }
                         
                         //skeletonDis[distance.Key] = 0;
@@ -338,7 +351,7 @@ namespace RFID_Beta_5
                     START_TIME_FLAG = true;
                 }
                 //tag.Epc.ToString() == "3008 33B2 DDD9 0140 0000 0000"   
-                if (tag.Epc.ToString() == "0908 2014 9630 0000 0000 666A" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6669" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6668")
+                if (tag.Epc.ToString() == "0908 2014 9630 0000 0000 666A" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6669" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6668" || tag.Epc.ToString()== "0908 2014 9630 0000 0000 001E")
                 {
                     //Console.WriteLine("lalalallalala: {0}", tag.Epc.ToString());
                     if (tag.AntennaPortNumber == 1)
@@ -433,7 +446,7 @@ namespace RFID_Beta_5
                                 double velocity = v.v_calculator(tag.ChannelInMhz, Ant_2);
 
                                 //*************************************************************************
-                                //Write_file(tag.Epc.ToString(), Ant_2, API_DFS_2, velocity, Convert.ToDouble(tag.LastSeenTime.ToString()));
+                                Write_file(tag.Epc.ToString(), Ant_2, API_DFS_2, velocity, Convert.ToDouble(tag.LastSeenTime.ToString()));
                                 //*************************************************************************
 
                                 //RfidVelocityList.Add(tag.Epc.ToString(),)

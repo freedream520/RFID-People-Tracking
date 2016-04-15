@@ -227,12 +227,15 @@ namespace PeopleTrackingGui
 
         public Thread match;
 
-        public double distanceThrechhood = 0.5;
+        public double distanceThrechhood = 10;
 
         /// <summary>
         /// 
         /// </summary>
         public readonly double THRESHOlD_STATIC = 50;
+
+
+        public Dictionary<ulong, Point> skeletonLastPoint;
 
         public class DataXY
         {
@@ -328,6 +331,9 @@ namespace PeopleTrackingGui
                 DateTime dt = new DateTime(DateTime.Now.Ticks - TimeSpan.FromSeconds(i).Ticks);
                 _data.Add(new DataXY() { cat1 = dt.ToString("HH:mm:ss"), val1 = 0, val2 = 0, val3 = 0, val4 = 0 });
             }
+
+            skeletonLastPoint = new Dictionary<ulong, Point>();
+
         }
 
 
@@ -479,7 +485,8 @@ namespace PeopleTrackingGui
                                 {
                                     if (RFID.IsRFIDOpen)
                                     {
-                                        RecordSkeletonPosition();
+                                        //RecordSkeletonPosition();
+                                        RecordSkeletonDisplacement();
 
                                     }
                                     DrawActivityOnCanvas();
@@ -541,11 +548,12 @@ namespace PeopleTrackingGui
                             j++;
                         }
 
-                        //NDtw.Dtw dtw = new NDtw.Dtw(skeletonDis, rfidVe);
-                        Correlation c = new Correlation();
-                        double dtwDis = Math.Abs(c.ComputeCoeff(skeletonDis, rfidVe));
-
-                        if (dtwDis < distanceThrechhood)
+                        NDtw.Dtw dtw = new NDtw.Dtw(skeletonDis, rfidVe);
+                        //Correlation c = new Correlation();
+                        //double dtwDis = Math.Abs(c.ComputeCoeff(skeletonDis, rfidVe));
+                        double dtwDis = Math.Abs(dtw.GetCost());
+                        dtwDis = dtwDis / dtw.GetPath().Length;
+                        if (dtwDis > distanceThrechhood)
                         {
                             skeletonToRemove.Add(match.Key);
                         }
@@ -590,6 +598,7 @@ namespace PeopleTrackingGui
             {
                 //writeSkeletonAndRfid();
                 writeSkeletonAndRfid();
+                writeSkeletonAndRfidRaw();
 
                 if (RFID.totalCounter >= 300)
                 {
@@ -601,11 +610,15 @@ namespace PeopleTrackingGui
                     List<string> tagStatic = new List<string>();
                     List<ulong> skeletonStatic = new List<ulong>();
 
-                    seperateStaticSkeleton(skeletonList, skeletonStatic);
-                    seperateStaticTag(RFID.RfidDistanceList, tagStatic);
+                    //seperateStaticSkeleton(skeletonList, skeletonStatic);
+                    //seperateStaticTag(RFID.RfidDistanceList, tagStatic);
 
                     foreach (KeyValuePair<ulong, SkeletonPosition> skeletonEntry in skeletonList)
                     {
+                        if (skeletonEntry.Value.relDistance.Count < 99) {
+                            Console.WriteLine("id "+skeletonEntry.Key+"not enough data");                  
+                            continue;
+                        }
                         if (!optMatch.ContainsKey(skeletonEntry.Key))
                         {
 
@@ -613,7 +626,9 @@ namespace PeopleTrackingGui
 
                             //Console.WriteLine("deviation of skeleton "+ skeletonEntry.Key+" is " + Correlation.deviation(skeletonDis));
 
+                            //OnlineMedianFilter fileter = new OnlineMedianFilter(5);
 
+                            //skeletonDis=fileter.ProcessSamples(skeletonDis);
                             //if (Correlation.deviation(skeletonDis) <= THRESHOlD_STATIC) {
                             //    skeletonStatic.Add(skeletonEntry.Key);
                             //    continue;
@@ -628,7 +643,7 @@ namespace PeopleTrackingGui
                                 //int j = 0;
                                 double[] rfidVe = generateSequence(rfidVelocityEntry.Value.distance);
 
-                                Correlation c = new Correlation();
+                                //Correlation c = new Correlation();
 
                                 Console.WriteLine("deviation of tag " + rfidVelocityEntry.Key + " is " + Correlation.deviation(rfidVe));
 
@@ -646,20 +661,22 @@ namespace PeopleTrackingGui
                                 //    continue;
                                 //}
 
-                                double dtwDis = Math.Abs(c.ComputeCoeff(skeletonDis, rfidVe));
+                                NDtw.Dtw dtw = new NDtw.Dtw(skeletonDis, rfidVe);
 
-                                //dtwDis = dtwDis / dtw.GetPath().Length;
+                                double dtwDis = Math.Abs(dtw.GetCost());
+
+                                dtwDis = dtwDis / dtw.GetPath().Length;
 
                                 Console.WriteLine(skeletonEntry.Key + " with" + rfidVelocityEntry.Key + "has " + dtwDis + " distance");
 
                                 if (optMatch.ContainsKey(skeletonEntry.Key))
                                 {
-                                    if (optMatch[skeletonEntry.Key].Value < dtwDis)
+                                    if (optMatch[skeletonEntry.Key].Value > dtwDis)
                                     {
                                         optMatch[skeletonEntry.Key] = new KeyValuePair<string, double>(rfidVelocityEntry.Key, dtwDis);
                                     }
                                 }
-                                else if (dtwDis >= distanceThrechhood)
+                                else if (dtwDis <= distanceThrechhood)
                                 {
                                     optMatch.Add(skeletonEntry.Key, new KeyValuePair<string, double>(rfidVelocityEntry.Key, dtwDis));
                                 }
@@ -671,25 +688,25 @@ namespace PeopleTrackingGui
                         }
                     }
 
-                    foreach (ulong skeletonId in skeletonStatic)
-                    {
-                        double[] skeletonDis = generateSequence(skeletonList[skeletonId].relDistance);
+                    //foreach (ulong skeletonId in skeletonStatic)
+                    //{
+                    //    double[] skeletonDis = generateSequence(skeletonList[skeletonId].relDistance);
 
-                        foreach (string tagId in tagStatic)
-                        {
-                            double[] rfidDis = generateSequence(RFID.RfidDistanceList[tagId].distance);
+                    //    foreach (string tagId in tagStatic)
+                    //    {
+                    //        double[] rfidDis = generateSequence(RFID.RfidDistanceList[tagId].distance);
 
-                            //double meanDeviation=Correlation.meanDeviation(skeletonDis, rfidDis);
+                    //        //double meanDeviation=Correlation.meanDeviation(skeletonDis, rfidDis);
 
-                            if (optMatch.ContainsKey(skeletonId))
-                            {
-                            }
-                            else {
-                                optMatch.Add(skeletonId, new KeyValuePair<string, double>(tagId, 1));
-                            }
-                        }
+                    //        if (optMatch.ContainsKey(skeletonId))
+                    //        {
+                    //        }
+                    //        else {
+                    //            optMatch.Add(skeletonId, new KeyValuePair<string, double>(tagId, 1));
+                    //        }
+                    //    }
 
-                    }
+                    //}
 
                     foreach (Person person in persons)
                     {
@@ -755,10 +772,74 @@ namespace PeopleTrackingGui
             }
         }
 
+        private void writeSkeletonAndRfidRaw()
+        {
+            test++;
+            if (test % 1 == 0)
+            {
+                lock (skeletonList) lock (RFID.RfidDistanceList)
+                    {
+                        foreach (KeyValuePair<ulong, SkeletonPosition> skeletonEntry in skeletonList)
+                        {
+                            double[] skeletonDis = new double[skeletonEntry.Value.relDistance.Count];
+
+                            int i = 0;
+                            foreach (KeyValuePair<DateTime, double> relDis in skeletonEntry.Value.relDistance)
+                            {
+                                skeletonDis[i] = relDis.Value;
+                                i++;
+                            }
+
+                            //OnlineMedianFilter filter = new OnlineMedianFilter(5);
+
+                            //skeletonDis = filter.ProcessSamples(skeletonDis);
+
+                            for (int k = 0; k < skeletonDis.Length; k++)
+                            {
+                                using (StreamWriter writer = new StreamWriter(@"C:\Users\Dongyang\Desktop\" + skeletonEntry.Key + "raw.txt", true))
+                                {
+                                    writer.WriteLine("{0}", skeletonDis[k]);
+                                }
+                            }
+                        }
+
+                        foreach (KeyValuePair<string, RfidVelocity> rfidVelocityEntry in RFID.RfidDistanceList)
+                        {
+                            int j = 0;
+                            double[] rfidVe = new double[rfidVelocityEntry.Value.distance.Count];
+
+                            foreach (KeyValuePair<DateTime, double> rfidDis in rfidVelocityEntry.Value.distance)
+                            {
+                                rfidVe[j] = rfidDis.Value;
+                                j++;
+
+
+
+                            }
+
+                            //OnlineMedianFilter o = new OnlineMedianFilter(5);
+
+                            //rfidVe = o.ProcessSamples(rfidVe);
+
+                            for (int k = 0; k < rfidVe.Length; k++)
+                            {
+                                using (StreamWriter writer = new StreamWriter(@"C:\Users\Dongyang\Desktop\" + rfidVelocityEntry.Key + "raw.txt", true))
+                                {
+                                    writer.WriteLine("{0}", rfidVe[k]);
+                                }
+                            }
+                        }
+
+                    }
+                return;
+            }
+
+        }
+
         private void writeSkeletonAndRfid()
         {
             test++;
-            if (test % 2 == 0)
+            if (test % 1 == 0)
             {
                 lock (skeletonList) lock (RFID.RfidDistanceList)
                     {
@@ -819,6 +900,66 @@ namespace PeopleTrackingGui
 
         }
 
+        private double calcRealDisPlacement(ulong id, Point point)
+        {
+
+            if (skeletonLastPoint.ContainsKey(id))
+            {
+                double dis = Transformation.PointVectorDistance(point, skeletonLastPoint[id]);
+                skeletonLastPoint[id] = point;
+                return dis;
+
+            }
+            else {
+                skeletonLastPoint.Add(id, point);
+                return 0;
+            }
+
+
+        }
+
+        private void RecordSkeletonDisplacement()
+        {
+            for (int i = 0; i < kinectSensor.BodyFrameSource.BodyCount; ++i)
+            {
+                if (bodies[i].IsTracked)
+                {
+                    CameraSpacePoint headPositionCamera = Transformation.RotateBackFromTilt(TILT_ANGLE, true, bodies[i].Joints[JointType.Head].Position);
+                    Point bodyPosition = new Point(headPositionCamera.X * 100, headPositionCamera.Z * 100);
+
+
+                    double realDis = calcRealDisPlacement(bodies[i].TrackingId, bodyPosition);
+
+                    if (skeletonList.ContainsKey(bodies[i].TrackingId))
+                    {
+
+                        lock (skeletonDis)
+                        {
+
+                            if (skeletonDis.ContainsKey(bodies[i].TrackingId))
+                            {
+                                skeletonDis[bodies[i].TrackingId] += realDis;
+                            }
+                            else {
+                                skeletonDis.Add(bodies[i].TrackingId, realDis);
+                            }
+                        }
+
+                    }
+                    else {
+                        var s = new SkeletonPosition(bodies[i].TrackingId);
+
+                        s.relDistance.Add(DateTime.Now, 0);
+
+                        skeletonList.Add(bodies[i].TrackingId, s);
+
+
+                    }
+
+                }
+            }
+        }
+
 
         private void RecordSkeletonPosition()
         {
@@ -834,8 +975,6 @@ namespace PeopleTrackingGui
                     Point bodyPosition = new Point(headPositionCamera.X * 100, headPositionCamera.Z * 100);
 
                     double distance = Transformation.PointDistance(kinectPosition, bodyPosition);
-
-
 
                     if (skeletonList.ContainsKey(bodies[i].TrackingId) && lastSkeletonDistance.ContainsKey(bodies[i].TrackingId))
                     {
@@ -1034,6 +1173,9 @@ namespace PeopleTrackingGui
             {
                 if (person.IsTracked)
                 {
+                    //StreamWriter writer = new StreamWriter("person_position.txt", true);
+                    //writer.WriteLine("{0},{1}",person.Position.X,person.Position.Y);
+                    //writer.Close();
                     Plot.DrawPeopleFromKinectOnCanvas(Plot.EllipseDiameter, person.Position.X, person.Position.Y, person.Color, Canvas_Position_Foreground);
                     Plot.DrawPeopleTagId(person, Canvas_Position_Foreground);
                     Plot.DrawOrientationOnCanvas(Plot.EllipseDiameter, Plot.TriangleSideLength, person.Orientation, person.Position.X, person.Position.Y, System.Windows.Media.Brushes.Black, Canvas_Position_Foreground);
@@ -1333,15 +1475,21 @@ namespace PeopleTrackingGui
         private double[] generateSequence(Dictionary<DateTime, double> timeSequence)
         {
 
-            double[] sequence = new double[timeSequence.Count];
-            int i = 0;
-            foreach (KeyValuePair<DateTime, double> pair in timeSequence)
+            lock (RFID.RfidDistanceList)
             {
-                sequence[i] = pair.Value;
-                i++;
+
+                double[] sequence = new double[timeSequence.Count];
+                int i = 0;
+                foreach (KeyValuePair<DateTime, double> pair in timeSequence)
+                {
+                    sequence[i] = pair.Value;
+                    i++;
+                }
+
+                return sequence;
+
             }
 
-            return sequence;
         }
 
 

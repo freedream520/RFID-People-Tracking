@@ -30,7 +30,7 @@ namespace RFID_Beta_5
         //    this.v = v;
         //}
         public double v_calculator(double Ft,double Fd) {
-            v = (Fd * 3e8) / (2 * Ft*1e6);
+            v = (Fd * 3e8) / (1 * Ft*1e6);
 
             return v;
         }
