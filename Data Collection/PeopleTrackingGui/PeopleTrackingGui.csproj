@@ -103,6 +103,7 @@
     <Compile Include="BodyOrientation.cs" />
     <Compile Include="Correlation.cs" />
     <Compile Include="DataXY.cs" />
+    <Compile Include="Difference.cs" />
     <Compile Include="DTWSimple.cs" />
     <Compile Include="dtw\DistanceMeasure.cs" />
     <Compile Include="dtw\Dtw.cs" />

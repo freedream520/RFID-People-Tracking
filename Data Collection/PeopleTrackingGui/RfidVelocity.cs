@@ -9,9 +9,12 @@ namespace PeopleTrackingGui
     public class RfidVelocity
     {
         public Dictionary<DateTime, double> distance;
+        public Dictionary<DateTime, double> api_phase;
 
-        public RfidVelocity() {
+        public RfidVelocity()
+        {
             distance = new Dictionary<DateTime, double>();
+            api_phase = new Dictionary<DateTime, double>();
         }
     }
 }
