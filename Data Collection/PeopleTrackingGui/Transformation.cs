@@ -424,6 +424,12 @@ namespace ActivityRecognition
 
             return a*PointDistance(p1,p2);
         }
+
+        public static Point RelativePosition(Point point, Point reference) {
+
+            return new Point(point.X - reference.X, point.Y - reference.Y);
+
+        }
          
 
     }

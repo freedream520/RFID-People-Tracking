@@ -47,6 +47,7 @@
                         <amq:LineGraph  Name="lineGraph4"  Background="Gray" Foreground="Green" Brush="Purple"   ValueMemberPath="val4" Title="graph4"/>
                     </amq:SerialChart.Graphs>
                 </amq:SerialChart>
+                <Label Name="dropLabel" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="18">#drop=0</Label>
             </Grid>
 
             <!--</StackPanel>

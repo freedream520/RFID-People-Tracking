@@ -11,12 +11,12 @@ namespace PeopleTrackingGui
     {
         public ulong skeletonId;
 
-        public Dictionary<DateTime, double> relDistance;
+        public Dictionary<DateTime, Dictionary<int,double>> relDistance;
 
         public SkeletonPosition(ulong skeletonId)
         {
             this.skeletonId = skeletonId;
-            relDistance = new Dictionary<DateTime, double>();
+            relDistance = new Dictionary<DateTime, Dictionary<int, double>>();
         }
 
 

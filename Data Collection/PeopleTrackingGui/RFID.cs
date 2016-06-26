@@ -50,7 +50,8 @@ namespace RFID_Beta_5
         private Dictionary<string, double> phaseAngle_1_Past;
 
         // double for previous timestamp
-        static double timestamp_1_Past = 0;
+        //static double timestamp_1_Past = 0;
+        private Dictionary<string, double> timestamp_1_Past;
         //static double timestamp_2_Past = 0;
         private Dictionary<string, double> timestamp_2_Past;
         static double timestamp_3_Past = 0;
@@ -93,7 +94,7 @@ namespace RFID_Beta_5
 
         //public static Dictionary<string, DateTime> tagLastTime;
 
-        private Dictionary<string, double> velocityPast;
+        private Dictionary<string, Dictionary<int, double>> velocityPast;
 
 
 
@@ -107,15 +108,19 @@ namespace RFID_Beta_5
 
         public Dictionary<string, Queue<double>> tagAngleBuffer;
 
-        public readonly double DRAW_LINE_INTERVAL = 1000 * 0.2;
+        public readonly double DRAW_LINE_INTERVAL = 1000 * 0.4;
 
         public static bool hasTagReported = false;
 
         private Dictionary<string, int> tagLeave;
 
-        public Dictionary<ulong, Point> skeletonLastPoint;
+        public Dictionary<ulong, Dictionary<int, Point>> skeletonLastPoint;
 
         public Dictionary<string, double> apiPhasePast;
+        public int tagVelocityDraw = 2;
+        public static int droptime = 0;
+        private double DOPPLER_THRESHOlD = Math.PI;
+        //private double DOPPLER_THRESHOlD = 1000;
 
 
 
@@ -150,10 +155,16 @@ namespace RFID_Beta_5
             Ant_2_previous = new Dictionary<string, double>();
             channel_2_Past = new Dictionary<string, double>();
             timestamp_2_Past = new Dictionary<string, double>();
-            velocityPast = new Dictionary<string, double>();
+
+            phaseAngle_1_Past = new Dictionary<string, double>();
+            Ant_1_previous = new Dictionary<string, double>();
+            channel_1_Past = new Dictionary<string, double>();
+            timestamp_1_Past = new Dictionary<string, double>();
+
+            velocityPast = new Dictionary<string, Dictionary<int, double>>();
             tagLeave = new Dictionary<string, int>();
 
-            skeletonLastPoint = new Dictionary<ulong, Point>();
+            skeletonLastPoint = new Dictionary<ulong, Dictionary<int, Point>>();
             apiPhasePast = new Dictionary<string, double>();
 
         }
@@ -194,101 +205,85 @@ namespace RFID_Beta_5
 
         }
 
-        private double getskeletonVelocity(ulong skeletonId, Point position)
+        private double getskeletonVelocity(ulong skeletonId, Point position, int antennaNum)
         {
             if (skeletonLastPoint.ContainsKey(skeletonId))
             {
-                double distance = Transformation.PointVectorDistance(position, skeletonLastPoint[skeletonId]);
-                skeletonLastPoint[skeletonId] = position;
-                return distance;
+                if (skeletonLastPoint[skeletonId].ContainsKey(antennaNum)) {
+                    double distance1 = Transformation.PointVectorDistance(position, m.antennaPositions[antennaNum]);
+                    double distance2= Transformation.PointVectorDistance(skeletonLastPoint[skeletonId][antennaNum], m.antennaPositions[antennaNum]);
+                    skeletonLastPoint[skeletonId][antennaNum] = position;
+                    return distance1-distance2;
+                }
+                else {
+                    skeletonLastPoint[skeletonId].Add(antennaNum, position);
+                    return 0;
+                }
+
+                //if (skeletonLastPoint[skeletonId].ContainsKey(antennaNum))
+                //{
+                //    double distance = Transformation.PointVectorDistance(position, skeletonLastPoint[skeletonId][antennaNum]);
+                //    skeletonLastPoint[skeletonId][antennaNum] = position;
+                //    return distance;
+                //}
+                //else {
+                //    skeletonLastPoint[skeletonId].Add(antennaNum, position);
+                //    return 0;
+                //}
+
             }
             else {
-                skeletonLastPoint.Add(skeletonId, position);
+                Dictionary<int, Point> positionLast = new Dictionary<int, Point>();
+                positionLast.Add(antennaNum, position);
+                skeletonLastPoint.Add(skeletonId, positionLast);
                 return 0;
             }
 
         }
 
+        private double calcAntennaVelocity(Point antennaPosition, int antennaNum, KeyValuePair<ulong, Point> bodyPoint)
+        {
+
+            //Point relativePosition = Transformation.RelativePosition(bodyPoint.Value, antennaPosition);
+
+            double distance = getskeletonVelocity(bodyPoint.Key, bodyPoint.Value, antennaNum);
+             
+            //double velocity = distance * 1000 / DRAW_LINE_INTERVAL; 9
+
+            return distance;
+        }
+
         private void updateGraph_Elapse(object sender, ElapsedEventArgs e)
         {
+
+            //##########################
+            //#       for debug        #
+            //##########################
+            //if (frameCounter >= 99) {
+            //    ;
+            //}
+
             if (hasTagReported && m.kinectStarted)
             {
-                double angle1 = 0, angle2 = 0;
-                double dis1 = 0, velocitySkeleton = 0;
-                lock (anglesToDraw)
-                {
-                    foreach (KeyValuePair<string, double> angle in anglesToDraw)
-                    {
+                double dis1 = 0, velocitySkeleton1 = 0, dis2 = 0,velocitySkeleton2=0;
 
-                        //if (angle.Key == "0908 2014 9630 0000 0000 6668")
-                        //{
-                        //    angle1 = angle.Value;
-                        //}
-                        //else {
-                        //    angle2 = angle.Value;
-                        //}
-                    }
-                }
-
-
-                Dictionary<ulong, Point> skeletonPoint = m.searchSkeletonPosition();
-                lock (skeletonPoint)
-                {
-
-                    foreach (KeyValuePair<ulong, Point> position in skeletonPoint)
-                    {
-
-                        double distance = getskeletonVelocity(position.Key, position.Value);
-
-                        double velocity = distance * 1000 / DRAW_LINE_INTERVAL;
-
-                        if (velocity > 200)
-                        {
-                            Console.WriteLine("exception");
-                        }
-
-                        if (m.skeletonList.ContainsKey(position.Key))
-                        {
-                            if (!m.skeletonList[position.Key].relDistance.ContainsKey(DateTime.Now))
-                                try
-                                {
-                                    velocitySkeleton = velocity;
-                                    m.skeletonList[position.Key].relDistance.Add(DateTime.Now, velocity);
-                                }
-                                catch (Exception ex)
-                                {
-
-                                }
-
-                        }
-                        else {
-                            var s = new SkeletonPosition(position.Key);
-
-                            s.relDistance.Add(DateTime.Now, velocity);
-
-                            m.skeletonList.Add(position.Key, s);
-                        }
-
-                    }
-
-
-
-                }
-
+                //deal with rfid data
                 lock (RfidDistanceList)
                 {
                     List<string> recordedTags = new List<string>();
                     ///TODO revise velocity of rfid
-                    Dictionary<string, double> copyVelocityPast;
+                    Dictionary<string, Dictionary<int, double>> copyVelocityPast;
                     lock (velocityPast)
                     {
-                        copyVelocityPast = new Dictionary<string, double>(velocityPast);
+                        copyVelocityPast = new Dictionary<string, Dictionary<int, double>>(velocityPast);
                     }
-
-
-                    foreach (KeyValuePair<string, double> velocity in copyVelocityPast)
+                    //check drop
+                    foreach (KeyValuePair<string, Dictionary<int, double>> velocity in copyVelocityPast)
                     {
-                        if (velocity.Value == -1000)
+                        //#########################################
+                        //hard programmed
+                        //#########################################
+                        if (!velocity.Value.ContainsKey(1) || !velocity.Value.ContainsKey(2) || velocity.Value[2] == -1000 || velocity.Value[1] == -1000)
                         {
                             if (checkTagLeave(velocity.Key))
                             {
@@ -296,14 +291,25 @@ namespace RFID_Beta_5
                                 velocityPast.Remove(velocity.Key);
                             }
                             Console.WriteLine("throw away because of " + velocity.Key);
-
+                            droptime += 1;
                             m.searchSkeletonPosition().Clear();
                             return;
                         }
                         else {
                             resetTagLeave(velocity.Key);
                         }
-                        double distance = velocity.Value * 100;
+                    }
+
+                    //store doppler velocity
+                    foreach (KeyValuePair<string, Dictionary<int, double>> velocity in copyVelocityPast)
+                    {
+
+                        //#########################################
+                        //hard programmed
+                        //#########################################
+
+                        var distance = new Dictionary<int, double>(velocity.Value);
+
                         double apiDis = apiPhasePast[velocity.Key] * 100;
 
                         if (RfidDistanceList.ContainsKey(velocity.Key))
@@ -330,39 +336,76 @@ namespace RFID_Beta_5
 
                         if (velocity.Key == "1111 1111 1111 1111 1111 0004")
                         {
-                            dis1 = distance;
+                            dis1 = distance[1];
+                            //dis2 = distance[2];
+                            dis2 = 0;
                         }
-                        //else {
-                        //    dis2 = distance;
-                        //}
                         recordedTags.Add(velocity.Key);
                     }
 
                     lock (velocityPast)
                     {
-                        var keys = velocityPast.Keys;
+                        //var keys = velocityPast.Keys;
 
                         foreach (string key in recordedTags)
                         {
+                            //#########################################
+                            //hard programmed
+                            //#########################################
 
-                            velocityPast[key] = -1000;
-
+                            velocityPast[key][2] = -1000;
+                            velocityPast[key][1] = -1000;
                         }
                     }
 
+                }
 
+                //store skeleton velocity
+                Dictionary<ulong, Point> skeletonPoint = m.searchSkeletonPosition();
+                lock (skeletonPoint)
+                {
 
+                    foreach (KeyValuePair<ulong, Point> position in skeletonPoint)
+                    {
+                        Dictionary<int, double> velocityAntennas = new Dictionary<int, double>();
+                        foreach (int antenna in m.antennaPositions.Keys)
+                        {
+                            double distance = calcAntennaVelocity(m.antennaPositions[antenna], antenna, position);
+                            double velocity = distance * 1000 / DRAW_LINE_INTERVAL;
+                            velocityAntennas.Add(antenna, velocity);
+                        }
 
+                        if (m.skeletonList.ContainsKey(position.Key))
+                        {
+                            if (!m.skeletonList[position.Key].relDistance.ContainsKey(DateTime.Now))
+                                try
+                                {
+                                    //velocitySkeleton1 = 0;
+                                    velocitySkeleton1 = velocityAntennas[1];
+                                    velocitySkeleton2 = 0;
+                                    //velocitySkeleton2 = velocityAntennas[2];
+                                    m.skeletonList[position.Key].relDistance.Add(DateTime.Now, velocityAntennas);
+                                }
+                                catch (Exception ex)
+                                {
 
+                                }
 
+                        }
+                        else {
+                            var s = new SkeletonPosition(position.Key);
+
+                            s.relDistance.Add(DateTime.Now, velocityAntennas);
+
+                            m.skeletonList.Add(position.Key, s);
+                        }
+
+                    }
 
                 }
 
-
-
-
-
-                m.showGraph(dis1, velocitySkeleton);
+                m.showGraph(dis2, velocitySkeleton1, dis1,velocitySkeleton2);
+                
                 frameCounter++;
 
                 totalCounter++;
@@ -389,7 +432,7 @@ namespace RFID_Beta_5
                 settings.ReaderMode = ReaderMode.MaxMiller;
                 settings.SearchMode = SearchMode.DualTarget;
 
-  
+
 
                 settings.Session = 2;
                 settings.TagPopulationEstimate = 20;
@@ -401,8 +444,10 @@ namespace RFID_Beta_5
 
                 //settings.Antennas.GetAntenna(1).MaxTxPower = true;
                 //settings.Antennas.GetAntenna(1).MaxRxSensitivity = true;
+
                 settings.Antennas.GetAntenna(2).MaxTxPower = true;
                 settings.Antennas.GetAntenna(2).MaxRxSensitivity = true;
+
                 //settings.Antennas.GetAntenna(3).MaxTxPower = true;
                 //settings.Antennas.GetAntenna(3).MaxRxSensitivity = true;
                 //settings.Antennas.GetAntenna(4).MaxTxPower = true;
@@ -489,7 +534,7 @@ namespace RFID_Beta_5
                     START_TIME_FLAG = true;
                 }
                 //tag.Epc.ToString() == "3008 33B2 DDD9 0140 0000 0000"   
-                if (tag.Epc.ToString() == "1111 1111 1111 1111 1111 0003" || tag.Epc.ToString() == "1111 1111 1111 1111 1111 0006" || tag.Epc.ToString() == "1111 1111 1111 1111 1111 0004" /*|| tag.Epc.ToString() == "1111 1111 1111 1111 1111 0009"|| tag.Epc.ToString() == "0908 2014 9630 0000 0000 6667" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6669" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6668" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 001E"*/)
+                if (tag.Epc.ToString() == "1111 1111 1111 1111 1111 0002" || tag.Epc.ToString() == "1111 1111 1111 1111 1111 0004" || tag.Epc.ToString() == "1111 1111 1111 1111 1111 0007" /*|| tag.Epc.ToString() == "1111 1111 1111 1111 1111 0009"|| tag.Epc.ToString() == "0908 2014 9630 0000 0000 6667" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6669" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 6668" || tag.Epc.ToString() == "0908 2014 9630 0000 0000 001E"*/)
                 {
                     //Console.WriteLine("lalalallalala: {0}", tag.Ep   c.ToString());
                     if (tag.AntennaPortNumber == 1)
@@ -509,7 +554,7 @@ namespace RFID_Beta_5
                                 phaseAngle_1_Past.Add(tag.Epc.ToString(), tag.PhaseAngleInRadians);
                             }
 
-                            timestamp_1_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
+                            timestamp_1_Past[tag.Epc.ToString()] = Convert.ToDouble(tag.LastSeenTime.ToString());
                             Ant_1 = 0;
                             Ant_1_previous[tag.Epc.ToString()] = 0;
                             tmp_phase = 0;
@@ -522,22 +567,22 @@ namespace RFID_Beta_5
                         {
 
                             delta_Pahse_Angle_1_tmp = (tag.PhaseAngleInRadians - phaseAngle_1_Past[tag.Epc.ToString()]);
-                            delta_Timestamp_1_tmp = (Convert.ToDouble(tag.LastSeenTime.ToString()) - timestamp_1_Past) / 1000000;
+                            delta_Timestamp_1_tmp = (Convert.ToDouble(tag.LastSeenTime.ToString()) - timestamp_1_Past[tag.Epc.ToString()]) / 1000000;
                             tmp_phase = phaseAngle_1_Past[tag.Epc.ToString()];
                             phaseAngle_1_Past[tag.Epc.ToString()] = tag.PhaseAngleInRadians;
-                            timestamp_1_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
+                            timestamp_1_Past[tag.Epc.ToString()] = Convert.ToDouble(tag.LastSeenTime.ToString());
                             Ant_1 = (1 / (4 * Math.PI)) * (delta_Pahse_Angle_1_tmp / delta_Timestamp_1_tmp);
                             API_DFS_1 = tag.RfDopplerFrequency;
                             Ant_count_1++;
                             timeWriteFile = Convert.ToDouble(tag.LastSeenTime.ToString());
-                            if (Math.Abs(Ant_1 - 0) < 5 && Math.Abs(Ant_1 - Ant_1_previous[tag.Epc.ToString()]) <= 5)
+                            if (Math.Abs(Ant_1 - 0) < DOPPLER_THRESHOlD && Math.Abs(Ant_1 - Ant_1_previous[tag.Epc.ToString()]) <= DOPPLER_THRESHOlD)
                             {
 
                                 RFID_Beta_5.Velocity v = RFID_Beta_5.Velocity.getVelocity();
                                 double velocity = v.v_calculator(tag.ChannelInMhz, Ant_1);
                                 double apiVelocity = v.v_calculator(tag.ChannelInMhz, API_DFS_1);
 
-                                RecordTagVelocity(tag.Epc.ToString(), velocity, Convert.ToDouble(tag.LastSeenTime.ToString()), delta_Pahse_Angle_1_tmp, API_DFS_1);
+                                RecordTagVelocity(tag.Epc.ToString(), velocity, Convert.ToDouble(tag.LastSeenTime.ToString()), delta_Pahse_Angle_1_tmp, API_DFS_1, 1);
 
                                 //Write_file(1, Ant_1, timeWriteFile);
                                 Ant_1_previous[tag.Epc.ToString()] = Ant_1;
@@ -551,7 +596,7 @@ namespace RFID_Beta_5
                             //Console.WriteLine("Hopping here");
                             tmp_phase = 0;
                             phaseAngle_1_Past[tag.Epc.ToString()] = tag.PhaseAngleInRadians;
-                            timestamp_1_Past = Convert.ToDouble(tag.LastSeenTime.ToString());
+                            timestamp_1_Past[tag.Epc.ToString()] = Convert.ToDouble(tag.LastSeenTime.ToString());
                             channel_1_Past[tag.Epc.ToString()] = tag.ChannelInMhz;
 
                         }
@@ -597,7 +642,7 @@ namespace RFID_Beta_5
                             API_DFS_2 = tag.RfDopplerFrequency;
                             Ant_count_2++;
                             timeWriteFile = Convert.ToDouble(tag.LastSeenTime.ToString());
-                            if (Math.Abs(Ant_2 - 0) < 5 && Math.Abs(Ant_2 - Ant_2_previous[tag.Epc.ToString()]) <= 5)
+                            if (Math.Abs(Ant_2 - 0) < DOPPLER_THRESHOlD && Math.Abs(Ant_2 - Ant_2_previous[tag.Epc.ToString()]) <= DOPPLER_THRESHOlD)
                             {
                                 RFID_Beta_5.Velocity v = RFID_Beta_5.Velocity.getVelocity();
                                 double velocity = v.v_calculator(tag.ChannelInMhz, Ant_2);
@@ -613,7 +658,7 @@ namespace RFID_Beta_5
 
 
                                 //Console.WriteLine(velocity);
-                                RecordTagVelocity(tag.Epc.ToString(), velocity, Convert.ToDouble(tag.LastSeenTime.ToString()), delta_Pahse_Angle_2_tmp, API_DFS_2);
+                                RecordTagVelocity(tag.Epc.ToString(), velocity, Convert.ToDouble(tag.LastSeenTime.ToString()), delta_Pahse_Angle_2_tmp, API_DFS_2, 2);
 
                                 //_formatEpc(tag.LastSeenTime.ToString());
                                 //if (tag.Epc.ToString() == "0908 2014 9630 0000 0000 6668") {
@@ -743,8 +788,9 @@ namespace RFID_Beta_5
             return deltAngle;
         }
 
-        private void RecordTagVelocity(string tagId, double velocity, double time, double delta_Pahse_Angle_2_tmp, double API_Phase)
+        private void RecordTagVelocity(string tagId, double velocity, double time, double delta_Pahse_Angle_2_tmp, double API_Phase, int antennaNum)
         {
+
             lock (velocityPast)
             {
 
@@ -759,8 +805,10 @@ namespace RFID_Beta_5
                 if (velocityPast.ContainsKey(tagId)/* && tagLastTime.ContainsKey(tagId)*/)
                 {
 
-
-                    velocityPast[tagId] = velocity;
+                    //if (antennaNum == 1) {
+                    //    ;
+                    //}
+                    velocityPast[tagId][antennaNum] = velocity * 100;
 
 
                     lock (anglesToDraw)
@@ -780,7 +828,9 @@ namespace RFID_Beta_5
                 }
                 else if (!velocityPast.ContainsKey(tagId)/* && !tagLastTime.ContainsKey(tagId)*/)
                 {
-                    velocityPast.Add(tagId, 0);
+
+                    velocityPast.Add(tagId, new Dictionary<int, double>());
+                    velocityPast[tagId].Add(antennaNum, velocity);
 
                 }
 
